@@ -1,0 +1,2 @@
+"""Hextech Mayhem test suite."""
+

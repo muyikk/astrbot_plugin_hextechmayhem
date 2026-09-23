@@ -1,0 +1,5 @@
+aiohttp>=3.10,<4
+beautifulsoup4>=4.12,<5
+certifi>=2024.8.30
+Pillow>=11.1,<13
+yarl>=1.15,<2

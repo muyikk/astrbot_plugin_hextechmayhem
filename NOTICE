@@ -1,0 +1,22 @@
+This plugin is an independent implementation inspired by the user-facing
+features of PayneXie/astrbot_plugin_hextech:
+https://github.com/PayneXie/astrbot_plugin_hextech
+
+No source code or bundled data files from that project are included.
+
+Champion data and game assets are loaded at runtime from Riot Games Data
+Dragon. Augment definitions are loaded from CommunityDragon. Public ARAM:
+Mayhem statistics are read from OP.GG server-rendered pages, optional mechanic
+notes are read from the official League of Legends Wiki, and optional Chinese
+aliases and image fallbacks use public gtimg resources. Those services, data,
+names, and assets remain subject to their own terms and intellectual-property
+policies.
+
+Optional full-item routes are loaded at runtime from Mayhempedia:
+https://github.com/boxsbraindump/Mayhempedia
+Mayhempedia is distributed under the MIT License. Its route data is presented
+as community-authored guidance and is not represented as OP.GG statistics.
+
+This project is not endorsed by Riot Games and does not reflect the views or
+opinions of Riot Games or anyone officially involved in producing or managing
+League of Legends.
