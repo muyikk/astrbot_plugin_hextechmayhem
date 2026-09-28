@@ -2,6 +2,11 @@ This plugin is an independent implementation inspired by the user-facing
 features of PayneXie/astrbot_plugin_hextech:
 https://github.com/PayneXie/astrbot_plugin_hextech
 
+Copyright (C) 2026 muyikk
+
+This project is distributed under the GNU General Public License version 3.0
+only. See LICENSE for the complete license text.
+
 No source code or bundled data files from that project are included.
 
 Champion metadata and splash art are loaded at runtime from Riot Games Data
