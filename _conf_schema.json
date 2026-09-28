@@ -1,69 +1,64 @@
 {
-  "llm_provider_id": {
-    "description": "英雄别名识别和 Wiki 机制中文翻译使用的 LLM 提供商",
+	"llm_provider_id": {
+		"description": "用于英雄别名识别的 LLM 提供商",
+		"type": "string",
+		"default": "",
+		"_special": "select_provider",
+		"hint": "ARAMGG 英雄名称和别名无法匹配时，使用所选 LLM 识别玩家黑话；留空时关闭 LLM 兜底。模型结果只会重新匹配 ARAMGG 英雄列表，不会直接作为网络地址使用。例如：卢仙/奥巴马 - 圣枪游侠；奶妈 - 众星之子。"
+	},
+  "mayhem_source": {
+		"description": "选择海斗信息源",
+		"type": "string",
+		"options": ["opgg", "aramgg"],
+		"default": "aramgg",
+    "hint": "选择用于英雄胜率、登场率、场次、海克斯和出装统计的数据源。国内优先使用aramgg，opgg可能会卡。"
+  },
+  "aramgg_api_key": {
+    "description": "ARAMGG 数据 API Key（选择 opgg 源可忽略）",
     "type": "string",
     "default": "",
-    "_special": "select_provider",
-    "hint": "选择后同时启用英雄别名识别和 Wiki 机制翻译；留空时关闭全部 LLM 功能。模型结果只会重新匹配 Riot 英雄列表或翻译 Wiki 原文，不会直接作为网络地址使用。"
+    "hint": "获取方式：访问 https://data.dtodo.cn/developer.html ，使用 GitHub 登录后创建 API Key，再将 hx_live_ 开头的完整密钥填入此处。仅在 mayhem_source=aramgg 时使用；密钥只作为鉴权请求头发送，不会写入报告或日志。默认每天 200 credits，单个英雄首次查询消耗 2 credits，缓存命中不重复消耗。"
   },
-  "enable_opgg_source": {
-    "description": "启用 OP.GG 海克斯大乱斗英雄统计",
-    "type": "bool",
-    "default": true,
-    "hint": "提供海克斯推荐、召唤师技能、技能加点和装备组合；关闭后英雄基础资料与海克斯搜索仍可使用。"
-  },
-  "enable_wiki_enrichment": {
-    "description": "启用 League of Legends Wiki 海克斯机制补充",
-    "type": "bool",
-    "default": true,
-    "hint": "英雄报告仅补充综合前三海克斯；有可用 LLM Provider 时翻译为中文，失败时省略而不显示未经确认的内容。"
-  },
-  "enable_gtimg_fallback": {
-    "description": "启用 gtimg 英雄别名和图片降级",
-    "type": "bool",
-    "default": true,
-    "hint": "仅在本地英雄名未匹配或 Riot/CommunityDragon 图片不可用时使用，不作为统计数据源。"
-  },
-  "enable_mayhempedia_source": {
-    "description": "启用 Mayhempedia 社区六件套路线",
-    "type": "bool",
-    "default": true,
-    "hint": "最多显示三条真实社区攻略路线；数据不足时不会使用插件推导组合补齐。"
-  },
-  "request_timeout_seconds": {
-    "description": "访问 Riot、CommunityDragon、OP.GG、Wiki、gtimg 和 Mayhempedia 的请求超时（秒）",
-    "type": "int",
-    "default": 20,
-    "hint": "有效范围 5-120 秒。"
-  },
-  "cache_ttl_seconds": {
-    "description": "实时数据的内存缓存有效时间（秒）",
-    "type": "int",
-    "default": 3600,
-    "hint": "刷新失败时会继续使用进程内最近一次成功的数据；重启插件后缓存消失。"
-  },
-  "max_concurrent_requests": {
-    "description": "最大并发上游请求数",
-    "type": "int",
-    "default": 3,
-    "hint": "有效范围 1-10；数值过高可能触发第三方站点限流。"
-  },
-  "max_results": {
-    "description": "海克斯搜索最多展示条数",
-    "type": "int",
-    "default": 5,
-    "hint": "有效范围 1-10。"
-  },
-  "max_augments_per_rarity": {
-    "description": "英雄报告每个稀有度最多展示的海克斯数量",
-    "type": "int",
-    "default": 5,
-    "hint": "有效范围 1-10，分别限制棱彩、黄金和白银推荐；旧配置 max_interactions 已弃用。"
-  },
-  "proxy": {
-    "description": "访问实时数据源时使用的 HTTP 代理",
-    "type": "string",
-    "default": "",
-    "hint": "可选，例如 http://127.0.0.1:7890；留空时不显式设置代理。"
-  }
+	"enable_mayhempedia_source": {
+		"description": "启用 Mayhempedia 社区六件套路线",
+		"type": "bool",
+		"default": false,
+		"hint": "最多显示三条真实社区攻略路线；数据不足时不会使用插件推导组合补齐。开启可能会慢。"
+	},
+	"request_timeout_seconds": {
+    "description": "访问 Riot Data Dragon、ARAMGG、OP.GG 和 Mayhempedia 的请求超时（秒）",
+		"type": "int",
+		"default": 20,
+		"hint": "有效范围 5-120 秒。"
+	},
+	"cache_ttl_seconds": {
+		"description": "实时数据的内存缓存有效时间（秒）",
+		"type": "int",
+		"default": 3600,
+		"hint": "刷新失败时会继续使用进程内最近一次成功的数据；重启插件后缓存消失。"
+	},
+	"max_concurrent_requests": {
+		"description": "最大并发上游请求数",
+		"type": "int",
+		"default": 3,
+		"hint": "有效范围 1-10；数值过高可能触发第三方站点限流。"
+	},
+	"max_results": {
+		"description": "海克斯搜索最多展示条数",
+		"type": "int",
+		"default": 5,
+		"hint": "有效范围 1-10。"
+	},
+	"max_augments_per_rarity": {
+		"description": "英雄报告每个稀有度最多展示的海克斯数量",
+		"type": "int",
+		"default": 5,
+		"hint": "有效范围 1-10，分别限制棱彩、黄金和白银推荐；旧配置 max_interactions 已弃用。"
+	},
+	"proxy": {
+		"description": "访问实时数据源时使用的 HTTP 代理",
+		"type": "string",
+		"default": "",
+		"hint": "可选，例如 http://127.0.0.1:7890；留空时不显式设置代理。"
+	}
 }

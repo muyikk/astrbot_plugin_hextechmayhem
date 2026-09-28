@@ -17,10 +17,8 @@ class MetadataTest(unittest.TestCase):
         self.assertEqual(config.cache_ttl_seconds, 3600)
         self.assertEqual(config.max_results, 5)
         self.assertEqual(config.max_augments_per_rarity, 5)
-        self.assertTrue(config.enable_opgg_source)
-        self.assertTrue(config.enable_wiki_enrichment)
-        self.assertTrue(config.enable_gtimg_fallback)
-        self.assertTrue(config.enable_mayhempedia_source)
+        self.assertEqual(config.mayhem_source, "aramgg")
+        self.assertFalse(config.enable_mayhempedia_source)
 
         bounded = ServiceConfig.from_mapping(
             {"request_timeout_seconds": 1, "max_concurrent_requests": 99}
@@ -34,9 +32,8 @@ class MetadataTest(unittest.TestCase):
             set(schema),
             {
                 "llm_provider_id",
-                "enable_opgg_source",
-                "enable_wiki_enrichment",
-                "enable_gtimg_fallback",
+                "mayhem_source",
+                "aramgg_api_key",
                 "enable_mayhempedia_source",
                 "request_timeout_seconds",
                 "cache_ttl_seconds",
@@ -47,18 +44,20 @@ class MetadataTest(unittest.TestCase):
             },
         )
 
-    def test_command_group_has_expected_aliases(self) -> None:
+    def test_only_standalone_chinese_commands_are_registered(self) -> None:
         source = (ROOT / "main.py").read_text(encoding="utf-8")
-        self.assertIn('@filter.command_group("hextech", alias={"海克斯科技"})', source)
-        self.assertIn('@hextech.command("hero", alias={"英雄", "海斗"})', source)
-        self.assertIn('@hextech.command("augment", alias={"海克斯", "强化"})', source)
+        self.assertIn('@filter.command("海斗")', source)
+        self.assertIn('@filter.command("海克斯")', source)
+        self.assertIn('@filter.command("海斗排名")', source)
+        self.assertNotIn("command_group", source)
+        self.assertNotIn('@filter.command("hextech")', source)
 
     def test_mixed_language_and_multiword_query_recovery(self) -> None:
-        roots = {"hextech", "海克斯科技"}
-        heroes = {"hero", "英雄", "海斗"}
+        roots: set[str] = set()
+        heroes = {"海斗"}
         self.assertEqual(
             recover_command_query(
-                "/hextech 英雄 Miss Fortune",
+                "/海斗 Miss Fortune",
                 "Miss",
                 roots,
                 heroes,
@@ -67,7 +66,7 @@ class MetadataTest(unittest.TestCase):
         )
         self.assertEqual(
             recover_command_query(
-                "/海克斯科技 hero 暗裔剑魔",
+                "/海斗 暗裔剑魔",
                 "暗裔剑魔",
                 roots,
                 heroes,

@@ -4,11 +4,11 @@ https://github.com/PayneXie/astrbot_plugin_hextech
 
 No source code or bundled data files from that project are included.
 
-Champion data and game assets are loaded at runtime from Riot Games Data
-Dragon. Augment definitions are loaded from CommunityDragon. Public ARAM:
-Mayhem statistics are read from OP.GG server-rendered pages, optional mechanic
-notes are read from the official League of Legends Wiki, and optional Chinese
-aliases and image fallbacks use public gtimg resources. Those services, data,
+Champion metadata and splash art are loaded at runtime from Riot Games Data
+Dragon. Champion names, aliases, augment definitions, icons, builds and public
+ARAM: Mayhem statistics are loaded from the ARAMGG Data API. OP.GG
+server-rendered pages remain available as an optional statistics source.
+Those services, data,
 names, and assets remain subject to their own terms and intellectual-property
 policies.
 

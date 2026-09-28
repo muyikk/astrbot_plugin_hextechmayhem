@@ -5,12 +5,14 @@ import base64
 import json
 import re
 from dataclasses import replace
+from pathlib import Path
 from typing import Any, Iterable
 
 import astrbot.api.message_components as Comp
 from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, register
+from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
 try:
     from astrbot.core.star.filter.command import GreedyStr as QueryText
@@ -35,18 +37,18 @@ from .models import (
 from .renderer import ReportRenderer
 
 PLUGIN_NAME = "astrbot_plugin_hextechmayhem"
-_ROOT_COMMANDS = {"hextech", "海克斯科技"}
-_HERO_COMMANDS = {"hero", "英雄", "海斗"}
-_AUGMENT_COMMANDS = {"augment", "海克斯", "强化"}
+_HERO_COMMANDS = {"海斗"}
+_AUGMENT_COMMANDS = {"海克斯"}
 
 
-@register(PLUGIN_NAME, "muyikk", "英雄联盟大乱斗与海克斯强化查询", "1.0.0")
+@register(PLUGIN_NAME, "muyikk", "英雄联盟大乱斗与海克斯强化查询", "1.1.0")
 class HextechMayhemPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig | None = None) -> None:
         super().__init__(context)
         self.context = context
         self.config: dict[str, Any] = config or {}
-        self.service = HextechService(ServiceConfig.from_mapping(self.config))
+        data_dir = Path(get_astrbot_data_path()) / "plugin_data" / PLUGIN_NAME
+        self.service = HextechService(ServiceConfig.from_mapping(self.config), data_dir)
         self.renderer = ReportRenderer()
         self._translation_cache: dict[str, str] = {}
         if "max_interactions" in self.config and "max_augments_per_rarity" not in self.config:
@@ -56,34 +58,14 @@ class HextechMayhemPlugin(Star):
 
     async def initialize(self) -> None:
         await self.service.initialize()
-        logger.info("Hextech Mayhem 插件初始化完成")
+        logger.info("Hextech Mayhem 插件初始化完成，数据目录：%s", self.service.data_dir)
 
-    @filter.command_group("hextech", alias={"海克斯科技"})
-    def hextech():
-        """英雄联盟大乱斗和海克斯强化查询。"""
-        pass
-
-    @hextech.command("help", alias={"帮助"})
-    async def hextech_help(self, event: AstrMessageEvent):
-        """显示插件帮助。"""
-        yield event.plain_result(
-            "海克斯乱斗插件命令\n"
-            "/hextech hero <英雄> - 生成英雄大乱斗完整报告\n"
-            "/hextech augment <关键词> - 搜索海克斯强化\n"
-            "/hextech status - 查看各数据源和内存缓存状态\n\n"
-            "支持中文混用：\n"
-            "/海克斯科技 海斗 亚索\n"
-            "/hextech 英雄 Miss Fortune\n"
-            "/海克斯科技 海克斯 珠光护手\n"
-            "/hextech 状态"
-        )
-
-    @hextech.command("hero", alias={"英雄", "海斗"})
-    async def hextech_hero(self, event: AstrMessageEvent, query: QueryText = ""):
-        """查询英雄，例如：/hextech hero 亚索。"""
+    @filter.command("海斗")
+    async def hero_query(self, event: AstrMessageEvent, query: QueryText = ""):
+        """查询英雄，例如：/海斗 亚索。"""
         hero_query = extract_command_query(event, str(query), _HERO_COMMANDS)
         if not hero_query:
-            yield event.plain_result("请输入英雄名，例如：/hextech hero 亚索")
+            yield event.plain_result("请输入英雄名，例如：/海斗 亚索")
             return
         try:
             champion, list_stale = await self._resolve_champion(hero_query)
@@ -93,7 +75,6 @@ class HextechMayhemPlugin(Star):
                     report,
                     stale_sources=("Data Dragon", *report.stale_sources),
                 )
-            report = await self._translate_hero_wiki_notes(report)
             images = await self._hero_images(report)
             try:
                 image_bytes = await self.renderer.hero_report(
@@ -114,19 +95,18 @@ class HextechMayhemPlugin(Star):
             logger.exception("英雄查询失败：%s", error)
             yield event.plain_result("英雄查询失败，详情请查看 AstrBot 日志。")
 
-    @hextech.command("augment", alias={"海克斯", "强化"})
-    async def hextech_augment(self, event: AstrMessageEvent, query: QueryText = ""):
-        """搜索海克斯，例如：/hextech augment 珠光。"""
+    @filter.command("海克斯")
+    async def augment_query(self, event: AstrMessageEvent, query: QueryText = ""):
+        """搜索海克斯，例如：/海克斯 珠光护手。"""
         augment_query = extract_command_query(event, str(query), _AUGMENT_COMMANDS)
         if not augment_query:
-            yield event.plain_result("请输入海克斯名称，例如：/hextech augment 珠光护手")
+            yield event.plain_result("请输入海克斯名称，例如：/海克斯 珠光护手")
             return
         try:
             augments, total, stale = await self.service.search_augments(augment_query)
             if not augments:
                 yield event.plain_result(f"没有找到与“{augment_query}”相关的海克斯强化。")
                 return
-            augments = await self._translate_augment_wiki_notes(augments)
             images = await self._augment_images(augments)
             try:
                 image_bytes = await self.renderer.augment_report(
@@ -157,28 +137,35 @@ class HextechMayhemPlugin(Star):
             logger.exception("海克斯查询失败：%s", error)
             yield event.plain_result("海克斯查询失败，详情请查看 AstrBot 日志。")
 
-    @hextech.command("status", alias={"状态"})
-    async def hextech_status(self, event: AstrMessageEvent):
-        """查看实时数据与内存缓存状态。"""
-        status = self.service.status()
-        lines = [
-            "海克斯乱斗插件运行正常",
-            f"Data Dragon 版本：{status['champion_version']}",
-            f"英雄列表：{status['champions']} 个｜英雄详情缓存：{status['details']} 个",
-            "数据源：",
-        ]
-        for name, source in status["sources"].items():
-            age = format_age(source["age"])
-            suffix = f"｜{source['error']}" if source["error"] else ""
-            lines.append(f"- {name}：{source['state']}（{age}）{suffix}")
-        lines.extend(
-            [
-                f"图片内存缓存：{status['images']} 个",
-                f"缓存有效期：{status['cache_ttl']} 秒",
-                "所有缓存仅保存在当前进程内，插件重启后会清空。",
-            ]
-        )
-        yield event.plain_result("\n".join(lines))
+    @filter.command("海斗排名")
+    async def hero_rankings(self, event: AstrMessageEvent):
+        """查询海克斯大乱斗英雄胜率排名。"""
+        try:
+            rankings, stale = await self.service.champion_rankings(10)
+            source = self.service.config.mayhem_source
+            images = await self._load_images([item.icon_url for item in rankings])
+            try:
+                image_bytes = await self.renderer.ranking_report(
+                    self.html_render,
+                    rankings,
+                    images,
+                    source=source,
+                    stale=stale,
+                )
+            except Exception as error:
+                logger.exception("排行榜卡片渲染失败，降级为文字：%s", error)
+                yield event.plain_result(
+                    format_champion_rankings(rankings, stale=stale, source=source)
+                )
+                return
+            yield event.chain_result([image_from_bytes(image_bytes)])
+        except HextechError as error:
+            yield event.plain_result(str(error))
+        except asyncio.TimeoutError:
+            yield event.plain_result("查询超时，请稍后重试或调大请求超时配置。")
+        except Exception as error:
+            logger.exception("英雄胜率排名查询失败：%s", error)
+            yield event.plain_result("英雄胜率排名查询失败，详情请查看 AstrBot 日志。")
 
     async def terminate(self) -> None:
         await self.service.close()
@@ -225,74 +212,6 @@ class HextechMayhemPlugin(Star):
             logger.warning("LLM 英雄别名识别失败：%s", error)
             return []
 
-    async def _translate_hero_wiki_notes(self, report: HeroReport) -> HeroReport:
-        ranked = sorted(
-            (item for values in report.augments.values() for item in values),
-            key=lambda item: item.rank,
-        )[:3]
-        notes = {item.augment.id: item.augment.wiki_note_en for item in ranked if item.augment.wiki_note_en}
-        translated = await self._translate_notes(notes)
-        if not translated:
-            return report
-        groups: dict[str, tuple[AugmentRecommendation, ...]] = {}
-        for tier, values in report.augments.items():
-            groups[tier] = tuple(
-                replace(item, augment=replace(item.augment, mechanism=translated[item.augment.id]))
-                if item.augment.id in translated
-                else item
-                for item in values
-            )
-        return replace(report, augments=groups)
-
-    async def _translate_augment_wiki_notes(self, augments: list[Augment]) -> list[Augment]:
-        notes = {item.id: item.wiki_note_en for item in augments if item.wiki_note_en}
-        translated = await self._translate_notes(notes)
-        return [
-            replace(item, mechanism=translated[item.id]) if item.id in translated else item
-            for item in augments
-        ]
-
-    async def _translate_notes(self, notes: dict[str, str]) -> dict[str, str]:
-        if not notes:
-            return {}
-        result = {
-            key: self._translation_cache[value]
-            for key, value in notes.items()
-            if value in self._translation_cache
-        }
-        pending = {key: value for key, value in notes.items() if value not in self._translation_cache}
-        if not pending:
-            return result
-        provider = self._llm_provider()
-        if provider is None:
-            logger.warning("没有可用的 LLM Provider，跳过 Wiki 机制翻译")
-            return result
-        payload = [{"key": key, "text": text[:1800]} for key, text in pending.items()]
-        prompt = (
-            "将以下 League of Legends Wiki 机制说明忠实翻译为简洁中文。"
-            "不得添加原文没有的数值、结论或攻略。只返回严格 JSON："
-            '{"items":[{"key":"原 key","text":"中文翻译"}]}。'
-            "不要输出 Markdown 或解释。\n输入："
-            + json.dumps(payload, ensure_ascii=False)
-        )
-        try:
-            response = await provider.text_chat(prompt=prompt, contexts=[])
-            parsed = parse_llm_json(str(getattr(response, "completion_text", "") or ""))
-            items = parsed.get("items", [])
-            if not isinstance(items, list):
-                return result
-            for item in items:
-                if not isinstance(item, dict):
-                    continue
-                key = str(item.get("key") or "")
-                text = str(item.get("text") or "").strip()[:1200]
-                if key in pending and text:
-                    self._translation_cache[pending[key]] = text
-                    result[key] = text
-        except Exception as error:
-            logger.warning("LLM Wiki 机制翻译失败：%s", error)
-        return result
-
     def _llm_provider(self):
         provider_id = str(self.config.get("llm_provider_id") or "").strip()
         if not provider_id or not hasattr(self.context, "get_provider_by_id"):
@@ -315,6 +234,21 @@ class HextechMayhemPlugin(Star):
         for option in (*report.summoner_spells, *report.starter_items, *report.core_builds):
             urls.extend(_item_urls(option.items))
         urls.extend(_item_urls(report.boots))
+        for variant in report.build_variants:
+            for option in (
+                *variant.summoner_spells,
+                *variant.starter_items,
+                *variant.core_items,
+                *variant.situational_items,
+            ):
+                urls.extend(_item_urls(option.items))
+        urls.extend(
+            augment.icon_url
+            for trio in report.augment_trios
+            for augment in trio.augments
+            if augment.icon_url
+        )
+        urls.extend(_item_urls(tuple(item.item for item in report.item_performance)))
         for route in report.full_builds:
             urls.extend(_item_urls(route.items))
         return await self._load_images(urls)
@@ -344,7 +278,7 @@ def extract_command_query(event: AstrMessageEvent, fallback: str, subcommands: s
         except Exception:
             raw = ""
     raw = raw or str(getattr(event, "message_str", "") or "")
-    return recover_command_query(raw, fallback, _ROOT_COMMANDS, subcommands)
+    return recover_command_query(raw, fallback, set(), subcommands)
 
 
 def parse_llm_json(raw: str) -> dict[str, Any]:
@@ -372,10 +306,9 @@ def format_hero_text(report: HeroReport) -> str:
     suffix = f"｜旧缓存：{'、'.join(report.stale_sources)}" if report.stale_sources else ""
     lines = [
         f"{detail.name} · {detail.title}",
-        f"英文 ID：{detail.id}｜Riot 版本：{detail.version}｜OP.GG 版本：{report.patch or '未知'}｜{report.tier or '段位未知'}{suffix}",
-        detail.lore,
+        f"英文 ID：{detail.id}｜Riot 版本：{detail.version}｜海斗版本：{report.patch or '未知'}｜{report.tier or '段位未知'}{suffix}",
         "",
-        "海克斯推荐（OP.GG 排序，CommunityDragon 资料）：",
+        "海克斯推荐（海斗信息源排序，ARAMGG 资料）：",
     ]
     for tier in ("Prismatic", "Gold", "Silver"):
         values = report.augments.get(tier, ())
@@ -394,6 +327,39 @@ def format_hero_text(report: HeroReport) -> str:
     lines.extend(["出门装：", *_option_text(report.starter_items)])
     lines.append("鞋子：" + (_items_text(report.boots) if report.boots else "暂无数据"))
     lines.extend(["核心装备：", *_option_text(report.core_builds)])
+    if report.build_variants:
+        lines.append("流派与完整技能方案：")
+        for variant in report.build_variants:
+            lines.append(f"- {variant.name}{_stats_values(variant.win_rate, variant.pick_rate, variant.games)}")
+            for skill in variant.skill_orders:
+                lines.append(
+                    "  技能："
+                    + " → ".join(skill.order)
+                    + _stats_values(skill.win_rate, skill.pick_rate, skill.games)
+                )
+            if variant.summoner_spells:
+                lines.append("  召唤师技能：" + "；".join(_items_text(option.items) for option in variant.summoner_spells))
+            if variant.starter_items:
+                lines.append("  出门装：" + "；".join(_items_text(option.items) for option in variant.starter_items))
+            if variant.core_items:
+                lines.append("  核心装备：" + "；".join(_items_text(option.items) for option in variant.core_items))
+            if variant.situational_items:
+                lines.append("  情境装备：" + "；".join(_items_text(option.items) for option in variant.situational_items))
+    if report.augment_trios:
+        lines.append("三海克斯组合：")
+        for trio in report.augment_trios:
+            lines.append(
+                "- "
+                + " + ".join(item.name_zh for item in trio.augments)
+                + _stats_values(trio.win_rate, trio.pick_rate, trio.games)
+            )
+    if report.item_performance:
+        lines.append("热门单件表现：")
+        for item in report.item_performance:
+            lines.append(
+                f"- {item.item.name}"
+                + _stats_values(item.win_rate, item.pick_rate, item.games)
+            )
     lines.append("完整六件套（Mayhempedia 社区攻略）：")
     if report.full_builds:
         for route in report.full_builds:
@@ -402,6 +368,10 @@ def format_hero_text(report: HeroReport) -> str:
                 lines.append(f"  {route.note}")
     else:
         lines.append("- 暂无社区六件套；未使用推导组合补齐。")
+    if report.provenance:
+        lines.append("数据说明：" + "；".join(report.provenance))
+    if report.related_articles:
+        lines.append("相关文章：" + "；".join(item.title for item in report.related_articles))
     if report.unavailable_sources:
         lines.append("暂不可用来源：" + "、".join(report.unavailable_sources))
     return "\n".join(lines)
@@ -426,12 +396,71 @@ def format_augment_text(
     return "\n\n".join(lines)
 
 
-def format_age(value: int | None) -> str:
-    if value is None:
-        return "未加载"
-    if value < 60:
-        return f"{value} 秒前更新"
-    return f"{value // 60} 分钟前更新"
+def format_champion_rankings(
+    rankings: list[ChampionSummary], *, stale: bool, source: str
+) -> str:
+    patch = next((item.stats_patch for item in rankings if item.stats_patch), "未知")
+    date = next((item.stats_date for item in rankings if item.stats_date), "")
+    stats_source = next((item.stats_source for item in rankings if item.stats_source), source)
+    region = next((item.stats_region for item in rankings if item.stats_region), "")
+    source_label = "OP.GG" if source == "opgg" else "ARAMGG"
+    patch_label = f"｜版本 {patch}" if patch != "未知" else ""
+    metadata = "｜".join(
+        value
+        for value in (
+            date,
+            _ranking_source_label(stats_source),
+            _ranking_region_label(region),
+        )
+        if value
+    )
+    lines = [
+        f"海克斯大乱斗英雄综合强度排名｜{source_label}{patch_label}"
+        f"{'｜' + metadata if metadata else ''}{'｜缓存数据' if stale else ''}"
+    ]
+    for index, item in enumerate(rankings, start=1):
+        details = []
+        if item.stats_tier:
+            details.append(f"T{item.stats_tier}")
+        if item.win_rate is not None:
+            details.append(f"胜率 {item.win_rate * 100:.2f}%")
+        if item.pick_rate is not None:
+            details.append(f"登场率 {item.pick_rate * 100:.2f}%")
+        if item.games is not None:
+            details.append(f"{item.games:,} 场")
+        if item.tags:
+            details.append("/".join(_ranking_role_label(value) for value in item.tags))
+        if item.rank_delta:
+            details.append(f"排名变化 {item.rank_delta}")
+        rank = item.stats_rank or index
+        title = f"（{item.title}）" if item.title else ""
+        suffix = f"｜{'｜'.join(details)}" if details else ""
+        lines.append(f"{rank}. {item.name}{title}{suffix}")
+    return "\n".join(lines)
+
+
+def _ranking_role_label(value: str) -> str:
+    return {
+        "fighter": "战士",
+        "mage": "法师",
+        "tank": "坦克",
+        "marksman": "射手",
+        "support": "辅助",
+        "assassin": "刺客",
+    }.get(str(value).casefold(), str(value))
+
+
+def _ranking_source_label(value: str) -> str:
+    return {
+        "tencent": "腾讯公开快照",
+        "iesdev": "ARAMGG Build 统计",
+        "aramgg-client-upload": "ARAMGG 客户端匿名上传",
+        "opgg": "OP.GG",
+    }.get(str(value).casefold(), str(value))
+
+
+def _ranking_region_label(value: str) -> str:
+    return {"cn": "国服", "world": "全球"}.get(str(value).casefold(), str(value))
 
 
 def _item_urls(items: Iterable[ItemRef]) -> list[str]:
@@ -449,7 +478,29 @@ def _items_text(items: Iterable[ItemRef]) -> str:
 
 def _option_text(options) -> list[str]:
     values = list(options)
-    return [f"- {_items_text(option.items)}" for option in values] if values else ["- 暂无数据"]
+    return [f"- {_items_text(option.items)}{_loadout_stats_text(option)}" for option in values] if values else ["- 暂无数据"]
+
+
+def _loadout_stats_text(option) -> str:
+    values = []
+    if option.win_rate:
+        values.append(f"胜率 {option.win_rate}")
+    if option.pick_rate:
+        values.append(f"登场率 {option.pick_rate}")
+    if option.games:
+        values.append(f"{option.games} 场")
+    return f"（{'，'.join(values)}）" if values else ""
+
+
+def _stats_values(win_rate: str, pick_rate: str, games: str) -> str:
+    values = []
+    if win_rate:
+        values.append(f"胜率 {win_rate}")
+    if pick_rate:
+        values.append(f"登场率 {pick_rate}")
+    if games:
+        values.append(f"{games} 场")
+    return f"（{'，'.join(values)}）" if values else ""
 
 
 def _stats_text(item: AugmentRecommendation) -> str:
@@ -457,7 +508,7 @@ def _stats_text(item: AugmentRecommendation) -> str:
     if item.win_rate:
         values.append(f"胜率 {item.win_rate}")
     if item.pick_rate:
-        values.append(f"选择率 {item.pick_rate}")
+        values.append(f"登场率 {item.pick_rate}")
     if item.games:
         values.append(f"{item.games} 场")
     return f"（{'，'.join(values)}）" if values else ""

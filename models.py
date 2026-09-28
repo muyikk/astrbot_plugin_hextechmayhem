@@ -12,6 +12,17 @@ class ChampionSummary:
     title: str
     tags: tuple[str, ...] = ()
     aliases: tuple[str, ...] = ()
+    icon_url: str = ""
+    win_rate: float | None = None
+    pick_rate: float | None = None
+    games: int | None = None
+    stats_tier: str = ""
+    stats_patch: str = ""
+    stats_rank: int | None = None
+    stats_date: str = ""
+    stats_source: str = ""
+    stats_region: str = ""
+    rank_delta: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,7 +31,6 @@ class ChampionDetail:
     key: str
     name: str
     title: str
-    lore: str
     tags: tuple[str, ...]
     version: str
     splash_url: str
@@ -39,7 +49,6 @@ class Augment:
     mechanism: str = ""
     icon_url: str = ""
     api_name: str = ""
-    wiki_note_en: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +79,49 @@ class LoadoutOption:
 
 
 @dataclass(frozen=True, slots=True)
+class SkillOrderOption:
+    order: tuple[str, ...]
+    win_rate: str = ""
+    pick_rate: str = ""
+    games: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class BuildVariant:
+    name: str
+    win_rate: str = ""
+    pick_rate: str = ""
+    games: str = ""
+    summoner_spells: tuple[LoadoutOption, ...] = ()
+    skill_orders: tuple[SkillOrderOption, ...] = ()
+    starter_items: tuple[LoadoutOption, ...] = ()
+    core_items: tuple[LoadoutOption, ...] = ()
+    situational_items: tuple[LoadoutOption, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class AugmentTrio:
+    augments: tuple[Augment, ...]
+    win_rate: str = ""
+    pick_rate: str = ""
+    games: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ItemPerformance:
+    item: ItemRef
+    win_rate: str = ""
+    pick_rate: str = ""
+    games: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class RelatedArticle:
+    title: str
+    url: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class FullBuildRoute:
     name: str
     note: str
@@ -87,6 +139,11 @@ class OpggChampionData:
     starter_items: tuple[LoadoutOption, ...] = ()
     boots: tuple[ItemRef, ...] = ()
     core_builds: tuple[LoadoutOption, ...] = ()
+    build_variants: tuple[BuildVariant, ...] = ()
+    augment_trios: tuple[AugmentTrio, ...] = ()
+    item_performance: tuple[ItemPerformance, ...] = ()
+    provenance: tuple[str, ...] = ()
+    related_articles: tuple[RelatedArticle, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +157,11 @@ class HeroReport:
     starter_items: tuple[LoadoutOption, ...] = ()
     boots: tuple[ItemRef, ...] = ()
     core_builds: tuple[LoadoutOption, ...] = ()
+    build_variants: tuple[BuildVariant, ...] = ()
+    augment_trios: tuple[AugmentTrio, ...] = ()
+    item_performance: tuple[ItemPerformance, ...] = ()
+    provenance: tuple[str, ...] = ()
+    related_articles: tuple[RelatedArticle, ...] = ()
     full_builds: tuple[FullBuildRoute, ...] = ()
     unavailable_sources: tuple[str, ...] = ()
     stale_sources: tuple[str, ...] = ()
@@ -120,10 +182,9 @@ class CacheEntry:
 
 @dataclass(frozen=True, slots=True)
 class ServiceConfig:
-    enable_opgg_source: bool = True
-    enable_wiki_enrichment: bool = True
-    enable_gtimg_fallback: bool = True
-    enable_mayhempedia_source: bool = True
+    mayhem_source: str = "aramgg"
+    aramgg_api_key: str = ""
+    enable_mayhempedia_source: bool = False
     request_timeout_seconds: int = 20
     cache_ttl_seconds: int = 3600
     max_concurrent_requests: int = 3
@@ -135,15 +196,12 @@ class ServiceConfig:
     def from_mapping(cls, raw: dict[str, Any] | None) -> "ServiceConfig":
         data = raw or {}
         return cls(
-            enable_opgg_source=_as_bool(data.get("enable_opgg_source"), True),
-            enable_wiki_enrichment=_as_bool(
-                data.get("enable_wiki_enrichment"), True
-            ),
-            enable_gtimg_fallback=_as_bool(
-                data.get("enable_gtimg_fallback"), True
-            ),
+            mayhem_source=(str(data.get("mayhem_source") or "aramgg").strip().lower()
+                           if str(data.get("mayhem_source") or "aramgg").strip().lower() in {"opgg", "aramgg"}
+                           else "aramgg"),
+            aramgg_api_key=str(data.get("aramgg_api_key") or "").strip(),
             enable_mayhempedia_source=_as_bool(
-                data.get("enable_mayhempedia_source"), True
+                data.get("enable_mayhempedia_source"), False
             ),
             request_timeout_seconds=_bounded_int(
                 data.get("request_timeout_seconds"), 20, 5, 120
