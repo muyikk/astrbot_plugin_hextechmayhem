@@ -41,7 +41,7 @@ _HERO_COMMANDS = {"海斗"}
 _AUGMENT_COMMANDS = {"海克斯"}
 
 
-@register(PLUGIN_NAME, "muyikk", "英雄联盟大乱斗与海克斯强化查询", "1.1.0")
+@register(PLUGIN_NAME, "muyikk", "英雄联盟大乱斗与海克斯强化查询", "1.1.1")
 class HextechMayhemPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig | None = None) -> None:
         super().__init__(context)

@@ -2,7 +2,7 @@ name: astrbot_plugin_hextechmayhem
 display_name: 海克斯乱斗
 desc: 查询英雄联盟海克斯大乱斗统计、海克斯强化与社区出装路线，并生成富文本图片报告。
 short_desc: 海克斯大乱斗英雄统计与强化查询。
-version: v1.1.0
+version: v1.1.1
 author: muyikk
 repo: https://github.com/muyikk/astrbot_plugin_hextechmayhem
 astrbot_version: ">=4.9.2,<5"
